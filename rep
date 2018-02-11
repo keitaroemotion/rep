@@ -1,0 +1,131 @@
+#!/usr/bin/env ruby
+
+# get your current directory name
+# get your current branch
+# create the DSL file in target /usr/local/etc/rep/{dir_name}, if necessary
+# 
+
+# if your branch_name and dir_name matches current one,
+# pick up the DSL file and do swap
+# else, abort with message
+
+require "colorize"
+
+# help menu
+
+def get_instructions
+  pattern = File.open(instruction_file, "r")
+  pattern.each_line.to_a
+end
+
+def sort_instructions_per_file(instructions)
+  files = {}
+  lines = []
+  instructions
+    .map{ |i| i.chomp }
+    .reverse.each do |i|
+      if File.exist?(i.strip.chomp)
+        files[i] = lines
+        lines    = []
+      else
+        lines.push(i)
+      end
+    end
+  files
+end
+
+def serialize_instructions(instructions)
+  denominator = "|||"
+  sort_instructions_per_file(instructions).map do |k, v|
+    [
+      k,
+      v.select{ |i| /^[\s]*[^#\n]+/ =~ i } 
+       .map   { |i| i.split(denominator) }
+    ]  
+  end  
+end
+
+def recover_instructions(instructions)
+  serialize_instructions(instructions).map do |file_name, j|
+    system "mv #{file_name}.backup  #{file_name}"
+  end
+end
+
+def replace_instructions(instructions)
+  serialize_instructions(instructions).map do |i|
+    file_name    = i[0]
+    instructions = i[1]
+
+    system "cp #{file_name} #{file_name}.backup"
+    lines = File.open(file_name, "r").each_line.to_a
+    lines = lines.map do |line|
+      instructions.each do |instruction|
+        target    = instruction[0].strip.chomp
+        operation = instruction[1]
+        if line.strip.chomp.start_with?(target)
+          puts line.red
+          if operation.include?("#")
+            line = "# #{target}"  # comment out
+          else
+            line = line.gsub(target, operation)
+          end
+          puts line.green
+        end
+      end
+      line
+    end  
+    #
+    # overwrite the target file
+    #
+    File.open(file_name, "w") do |f|
+      puts("overwriting....")
+      lines.each do |line|
+        f.puts line
+      end
+    end
+  end
+end
+
+def get_current_repository
+  dir      = File.basename(`pwd`).chomp
+  branch   = `git branch`
+               .lines
+               .select{|b| b.include?("*")}[0]
+               .gsub("* ", "")
+               .chomp
+  repository = "/usr/local/etc/rep/#{dir}/#{branch}"             
+  system "mkdir -p #{repository}"
+  repository
+end
+
+def instruction_file
+  "#{get_current_repository}/instruction"
+end
+
+def edit_instructions
+  unless File.exist?(instruction_file)
+    File.open(instruction_file, "w") do |f|
+      f.puts("your/target/file/path.rb")
+      f.puts("code to comment out ||| # ")
+      f.puts("")
+      f.puts("your/target/file/path.rb")
+      f.puts("code to replace ||| code replaced")
+    end
+  end
+  system "vim #{instruction_file}"
+end
+
+option = ARGV[0]
+case option
+when "-e"
+  edit_instructions
+when "-b"
+  recover_instructions(get_instructions)
+when "-h"
+  puts "rep -b ... roll back to the original state"
+  puts "rep -e ... edit rules"
+  puts "rep    ... replace the files"
+  puts "rep -h ... help menu"
+else
+  replace_instructions(get_instructions)
+end  
