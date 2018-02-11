@@ -6,6 +6,7 @@ it does not harm your changes.
 ## Installation
 
 ```
+gem install colorize
 ./installer
 ```
 
