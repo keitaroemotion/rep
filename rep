@@ -14,6 +14,9 @@ require "colorize"
 # help menu
 
 def get_instructions
+  unless File.exist?(instruction_file)
+    abort("no instruction file found. you need to do such as: \n\n$rep -e\n\n")
+  end
   pattern = File.open(instruction_file, "r")
   pattern.each_line.to_a
 end
@@ -94,7 +97,9 @@ def get_current_repository
                .gsub("* ", "")
                .chomp
   repository = "/usr/local/etc/rep/#{dir}/#{branch}"             
-  system "mkdir -p #{repository}"
+  unless File.directory?(repository) 
+    system "mkdir -p #{repository}"
+  end
   repository
 end
 
